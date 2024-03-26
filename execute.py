@@ -2,7 +2,7 @@
 
 #TODO: Add the checkpoint loading and deleting, the multigpu support and logging
 
-import json, os, shutil, sys, time, requests, torch, platform
+import json, os, shutil, sys, time, requests, torch, cpuinfo
 import numpy as np
 from datasets import load_dataset
 from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
@@ -14,7 +14,7 @@ node_url = "https://mainnet.nimble.technology:443"
 # Class that defines the device (cpu or gpu) properties and best settings
 class Device:
     def __init__(self, index = 0):
-        self.type = self.get_type(index)
+        self.info = self.get_type(index)
         self.name = self.get_device_name()
         self.memory = self.get_memory()
         self.tf32 = self.is_tf32_supported()
@@ -23,7 +23,7 @@ class Device:
     def get_type(self, index):
         # If the index is not provided, check whether a gpu is available
         if index == 0:
-            return torch.device("cuda") if torch.cuda.device_count() == 1 and torch.cuda.is_available() else torch.device("cpu")
+            return torch.device(f"cuda:{index}") if torch.cuda.device_count() >= 1 and torch.cuda.is_available() else torch.device("cpu")
         # If the index is provided, check whether the gpu with that index is available. If not, raise an exception that the gpu provided is not available
         else:
             if torch.cuda.is_available() and torch.cuda.device_count() > index:
@@ -33,23 +33,23 @@ class Device:
 
     def get_memory(self):
         # If the device is a gpu, return the vram of the gpu
-        if self.device.type == "cuda":
-            return torch.cuda.get_device_properties(self.device).total_memory
+        if self.info.type == "cuda":
+            return torch.cuda.get_device_properties(self.info).total_memory
         # If the device is a cpu, return the ram of the system
         else:
             return os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
     
     def get_device_name(self):
         # If the device is a gpu, return the name of the gpu
-        if self.device.type == "cuda":
-            return torch.cuda.get_device_name(self.device)
+        if self.info.type == "cuda":
+            return torch.cuda.get_device_name(self.info)
         # If the device is a cpu, return the name of the cpu
         else:
-            return platform.processor()
+            return cpuinfo.get_cpu_info()['brand_raw']
         
-    def is_tf32_supported():
-        if torch.cuda.is_available():
-            major, minor = torch.cuda.get_device_capability(torch.cuda.current_device())
+    def is_tf32_supported(self):
+        if self.info.type == "cuda":
+            major, minor = torch.cuda.get_device_capability(self.info)
             return (major >= 8)
         else:
             return False
@@ -75,12 +75,14 @@ class Device:
 
 # Class that holds all of the information and methods for a task
 class Task:
-    def __init__(self, addr, device : Device):
+    def __init__(self, addr, device: Device):
+        self.device = device
         self.addr = addr
         self.task = self.request(addr)
         self.task['time_received'] = time.time()
     
     def request(self, addr):
+        print("Requesting task from the address: ", addr, " on the device: ", self.device.name + " (" + self.device.info.type + ")")
         url = f"{node_url}/register_particle"
 
         try:
@@ -149,7 +151,7 @@ class Task:
             self.task["model_name"], num_labels=self.task["num_labels"]
         )
 
-        device = self.device.type
+        device = self.device.info.type
         model.to(device)
 
         dataset = load_dataset(self.task["dataset_name"])
@@ -192,7 +194,7 @@ def arguments_handling():
     #Help message
     help_message = "This script is used to execute the task given by the nimble node. The possible arguments are: \n\
     -a (address): The address of the miner. \n\
-    -af (address file): Location of a file containing a list of addresses used to mine with multigpu. \n\
+    -af (address file): Location of a file containing a list of addresses used to mine. \n\
                         every line in the file should contain an address \n\
     -g (gpu index): The index of the gpus that will be used to mine. (Leave empty if the system doesn't have a GPU or you are using the first GPU in the system)\n\
                     if multiple gpus are provided, they should be separated by a comma. \n\
@@ -202,7 +204,7 @@ def arguments_handling():
     #Default values
     addr = None
     addr_file = None
-    device_index = 0
+    gpu_index = [0]
     addr_list = []
 
     #Arguments handling
@@ -280,6 +282,7 @@ def arguments_handling():
 def single_gpu_loop(addr_list):
     #In an infinite loop, try doing a task with the first address in the list, and if it fails, try the next address.
     #When all the addresses are done, start from the beginning
+    print("\nStarting mining on the gpu: ", addr_list[0][1].name)
     while True:
         for addr in addr_list:
             try:
@@ -297,6 +300,10 @@ def perform():
 
     #get all the available devices and their properties
     devices = [Device(i) for i in range(torch.cuda.device_count())]
+    print("\nAvailable devices: ")
+    for i in range(len(devices)):
+        print(f"Device {i}: {devices[i].name}")
+
     #If there are no gpus, use the cpu
     if len(devices) == 0:
         devices = [Device()]
@@ -304,7 +311,7 @@ def perform():
     #If the length of the devices is less than the number of devices provided, print an error message and exit
     if len(devices) < len(devices_index):
         print_in_color("Error: The number of gpus provided is more than the number of available gpus", "\033[31m")
-        print(f"Available Devices: \n")
+        print(f"\nAvailable Devices:")
         for i in range(len(devices)):
             print(f"Device {i}: {devices[i].name}")
         sys.exit()
@@ -318,10 +325,11 @@ def perform():
         single_gpu_loop(addr_list)
     #If the devices_index length is more than 1, separate the addr_list into multiple lists with the same device
     else:
+        mp.set_start_method('spawn')
         for i in range(len(devices_index)):
-            addr_list = [addr for addr in addr_list if addr[1].type == f"cuda:{devices_index[i]}"]
+            addr_list = [addr for addr in addr_list if addr[1].info.index == devices_index[i]]
+
             #Then launch a separate process for each list
-            mp.set_start_method('spawn')
             p = mp.Process(target=single_gpu_loop, args=(addr_list,))
             p.start()
             p.join()
