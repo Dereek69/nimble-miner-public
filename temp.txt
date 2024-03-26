@@ -1,0 +1,7 @@
+Richiesta task
+{'msg': 'Task registered successfully', 'args': {'num_labels': 5, 'model_name': 'distilbert-base-uncased', 'dataset_name': 'yelp_review_full', 'slices': 2000, 'num_rows': 276884, 'seed': 47}}
+
+Completata task
+<transformers.trainer_utils.EvalPrediction object>
+{'eval_loss': 0.41517671942719876, 'eval_accuracy': 0.8366798494338989, 'eval_runtime': 413.9891, 'eval_samples_per_second': 648.915, 'eval_steps_per_second': 20.03, 'epoch': 3.0}
+{'train_runtime': 4594.8494, 'train_samples_per_second': 173.237, 'train_steps_per_second': 5.414, 'train_loss': 0.6718225989776478, epoch': 3.0}
