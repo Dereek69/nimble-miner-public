@@ -2,3 +2,4 @@ nimenv_localminers/
 my_model/
 .vscode/launch.json
 addresses.txt
+benchmark_results.txt

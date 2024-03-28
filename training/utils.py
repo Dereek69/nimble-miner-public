@@ -104,9 +104,6 @@ def identify_devices(addr_list, devices_index):
     
     #get all the available devices and their properties
     devices = [Device(i) for i in range(torch.cuda.device_count())]
-    print("\nAvailable devices: ")
-    for i in range(len(devices)):
-        print(f"Device {i}: {devices[i].name}")
     
     #If there are no gpus, use the cpu
     if len(devices) == 0:
@@ -122,6 +119,6 @@ def identify_devices(addr_list, devices_index):
     
     #Replace the device index with the device object in the devices list
     for i in range(len(addr_list)):
-        addr_list[i] = (addr_list[i][0], devices[addr_list[i][1]])
+        addr_list[i] = (addr_list[i][0], devices[0])  #IT SHOULD HAVE BEEN devices[devices_index[i]] INSTEAD OF devices[0] IF RUN ON DDP
 
     return addr_list

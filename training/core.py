@@ -18,6 +18,7 @@ class Device:
 
     def get_type(self, index):
         # If the index is not provided, check whether a gpu is available
+        #os.environ["CUDA_VISIBLE_DEVICES"] = str(index)
         if index == 0:
             return torch.device(f"cuda:{index}") if torch.cuda.device_count() >= 1 and torch.cuda.is_available() else torch.device("cpu")
         # If the index is provided, check whether the gpu with that index is available. If not, raise an exception that the gpu provided is not available
@@ -54,19 +55,24 @@ class Device:
         # Return the best batch size given the memory size of the device
         # Under 4GB, the batch size is 8
         if self.memory < 4e9:
-            return 8
+            print("Memory is less than 4GB, using batch size 8")
+            return 4
         # Under 8GB, the batch size is 16
         elif self.memory < 8e9:
-            return 16
+            print("Memory is less than 8GB, using batch size 16")
+            return 8
         # Under 16GB, the batch size is 32
         elif self.memory < 16e9:
-            return 32
+            print("Memory is less than 16GB, using batch size 32")
+            return 16
         # Under 32GB, the batch size is 64
         elif self.memory < 32e9:
-            return 64
+            print("Memory is less than 32GB, using batch size 64")
+            return 32
         # Over 32GB, the batch size is 128
         elif self.memory >= 32e9:
-            return 128
+            print("Memory is more than 32GB, using batch size 128")
+            return 64
     
 
 # Class that holds all of the information and methods for a task
@@ -166,8 +172,6 @@ class Task:
 
         device = self.device.info
         model.to(device)
-        print(f"Device: {device}")
-        print(f"Model: {model.device}")
 
         dataset = load_dataset(self.task["dataset_name"])
         tokenized_datasets = dataset.map(tokenize_function, batched=True)

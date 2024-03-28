@@ -28,25 +28,25 @@ def perform():
 
     args = ArgumentHandler(sys.argv)
 
-    addr_list = identify_devices(args.addr_list, args.device_index)
+    addr_list = args.addr_list #identify_devices(args.addr_list, args.device_index)
 
     if args.benchmark:
         benchmark(args,addr_list)
         sys.exit()
 
     #If the devices_index length is 1, use the single gpu loop
-    if len(args.device_index) == 1:
-        single_gpu_loop(addr_list)
+    #if len(args.device_index) == 1:
+    #    single_gpu_loop(addr_list)
     #If the devices_index length is more than 1, separate the addr_list into multiple lists with the same device
-    else:
-        mp.set_start_method('spawn')
-        for i in range(len(args.device_index)):
-            filtered_addr_list = [addr for addr in addr_list if addr[1].info.index == args.device_index[i]]
-
-            #Then launch a separate process for each list
-            p = mp.Process(target=single_gpu_loop, args=(filtered_addr_list,))
-            p.start()
-            p.join()
+    #else:
+    mp.set_start_method('spawn')
+    for i in range(len(args.device_index)):
+        filtered_addr_list = [addr for addr in addr_list if addr[1].info.index == args.device_index[i]]
+        
+        #Then launch a separate process for each list
+        p = mp.Process(target=single_gpu_loop, args=(filtered_addr_list,))
+        p.start()
+        p.join()
     
 if __name__ == "__main__":
     perform()
